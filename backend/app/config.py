@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_WHATSAPP_FROM: str = "whatsapp:+14155238886"
+    TWILIO_WHATSAPP_TO: str = ""
     APP_ENV: str = "development"
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000

@@ -138,10 +138,19 @@ async def shopify_order_created(
         ))
 
     import asyncio
-    asyncio.create_task(add_to_index(
-        f"Order {payload.id} | Status: {status.value} | Total: {order.total_price}",
-        str(payload.id)
-    ))
+    order_text = (
+        f"Order {payload.id} | "
+        f"Status: {status.value} | "
+        f"Customer: {order.customer_name} | "
+        f"Email: {order.customer_email} | "
+        f"Total: {order.total_price} {order.currency} | "
+        f"Items: {order.item_count} | "
+        f"Channel: shopify | "
+        f"Ordered: {ordered_at} | "
+        f"SLA Deadline: {order.sla_deadline} | "
+        f"SLA Status: {order.sla_status}"
+    )
+    asyncio.create_task(add_to_index(order_text, str(payload.id)))
 
     return {"status": "created", "order_id": order.id}
 
@@ -174,5 +183,20 @@ async def shopify_order_updated(
     if order.ordered_at:
         order.sla_deadline = calculate_sla_deadline(order.ordered_at, new_status.value)
         order.sla_status = SLAStatus(get_sla_status(order.sla_deadline))
+
+    import asyncio
+    order_text = (
+        f"Order {payload.id} | "
+        f"Status: {new_status.value} | "
+        f"Customer: {order.customer_name} | "
+        f"Email: {order.customer_email} | "
+        f"Total: {order.total_price} {order.currency} | "
+        f"Items: {order.item_count} | "
+        f"Channel: shopify | "
+        f"Ordered: {order.ordered_at} | "
+        f"SLA Deadline: {order.sla_deadline} | "
+        f"SLA Status: {order.sla_status}"
+    )
+    asyncio.create_task(add_to_index(order_text, str(payload.id)))
 
     return {"status": "updated", "order_id": order.id}

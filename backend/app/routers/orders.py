@@ -43,6 +43,59 @@ async def list_orders(
     return OrderListResponse(orders=orders, total=total, page=page, page_size=page_size)
 
 
+@router.get("/sla-breaches")
+async def get_sla_breaches(db: AsyncSession = Depends(get_db)):
+    """Endpoint for N8N Workflow 1 - returns orders with SLA breaches or at risk."""
+    active_statuses = [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.SHIPPED]
+    result = await db.execute(
+        select(Order).where(
+            and_(
+                Order.status.in_(active_statuses),
+                Order.sla_status.in_([SLAStatus.BREACHED, SLAStatus.AT_RISK])
+            )
+        )
+    )
+    orders = result.scalars().all()
+    return [
+        {
+            "order_id": order.external_id,
+            "customer_name": order.customer_name or "Unknown",
+            "customer_email": order.customer_email,
+            "status": order.status.value,
+            "sla_status": order.sla_status.value,
+            "sla_deadline": str(order.sla_deadline) if order.sla_deadline else None,
+            "total_price": order.total_price,
+        }
+        for order in orders
+    ]
+
+
+@router.get("/low-stock")
+async def get_low_stock(db: AsyncSession = Depends(get_db)):
+    """Endpoint for N8N Workflow 3 - returns products with low stock."""
+    result = await db.execute(
+        select(
+            OrderItem.product_title,
+            OrderItem.sku,
+            func.sum(OrderItem.quantity).label("total_ordered")
+        )
+        .group_by(OrderItem.product_title, OrderItem.sku)
+        .order_by(func.sum(OrderItem.quantity).desc())
+        .limit(10)
+    )
+    items = result.all()
+    return [
+        {
+            "product_name": item.product_title,
+            "sku": item.sku,
+            "stock_level": max(0, 100 - item.total_ordered),  # simulated stock
+            "total_ordered": item.total_ordered,
+            "alert": item.total_ordered > 80
+        }
+        for item in items
+    ]
+
+
 @router.get("/{order_id}", response_model=OrderResponse)
 async def get_order(order_id: int, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     result = await db.execute(select(Order).where(Order.id == order_id))

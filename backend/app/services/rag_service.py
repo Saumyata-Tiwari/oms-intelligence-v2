@@ -10,7 +10,6 @@ _vector_store = None
 _embeddings = None
 
 FAISS_INDEX_PATH = Path("data/faiss_index")
-OLIST_CSV_PATH = Path("data/olist_orders.csv")
 
 
 def _load_embeddings():
@@ -30,6 +29,7 @@ def _get_vector_store():
         return _vector_store
 
     from langchain_community.vectorstores import FAISS
+    from langchain.schema import Document
     embeddings = _load_embeddings()
 
     if FAISS_INDEX_PATH.exists():
@@ -41,42 +41,16 @@ def _get_vector_store():
         )
         return _vector_store
 
-    if OLIST_CSV_PATH.exists():
-        logger.info("Building FAISS index from Olist CSV...")
-        _vector_store = _build_from_csv(embeddings)
-        return _vector_store
-
-    logger.warning("No FAISS index or CSV found. RAG will return empty context.")
-    return None
-
-
-def _build_from_csv(embeddings) -> Optional[object]:
-    import pandas as pd
-    from langchain_community.vectorstores import FAISS
-    from langchain.schema import Document
-
-    try:
-        df = pd.read_csv(OLIST_CSV_PATH, nrows=99441)
-        documents = []
-        for _, row in df.iterrows():
-            text = (
-                f"Order {row.get('order_id', 'N/A')} | "
-                f"Status: {row.get('order_status', 'N/A')} | "
-                f"Purchase: {row.get('order_purchase_timestamp', 'N/A')} | "
-                f"Estimated delivery: {row.get('order_estimated_delivery_date', 'N/A')} | "
-                f"Customer: {row.get('customer_city', 'N/A')}, {row.get('customer_state', 'N/A')}"
-            )
-            documents.append(
-                Document(page_content=text, metadata={"order_id": str(row.get("order_id", ""))})
-            )
-        store = FAISS.from_documents(documents, embeddings)
-        FAISS_INDEX_PATH.mkdir(parents=True, exist_ok=True)
-        store.save_local(str(FAISS_INDEX_PATH))
-        logger.info(f"✅ FAISS index built with {len(documents)} documents.")
-        return store
-    except Exception as e:
-        logger.error(f"Failed to build FAISS index: {e}")
-        return None
+    # Create empty FAISS index from a placeholder
+    logger.info("No FAISS index found. Creating empty index...")
+    placeholder = Document(
+        page_content="OMS Intelligence initialized. Waiting for Shopify orders.",
+        metadata={"order_id": "init"}
+    )
+    _vector_store = FAISS.from_documents([placeholder], embeddings)
+    FAISS_INDEX_PATH.mkdir(parents=True, exist_ok=True)
+    _vector_store.save_local(str(FAISS_INDEX_PATH))
+    return _vector_store
 
 
 async def get_rag_context(query: str, k: int = 5) -> str:
@@ -111,3 +85,4 @@ def _add_sync(order_text: str, order_id: str):
     doc = Document(page_content=order_text, metadata={"order_id": order_id})
     store.add_documents([doc])
     store.save_local(str(FAISS_INDEX_PATH))
+    logger.info(f"✅ Order {order_id} added to FAISS index.")
