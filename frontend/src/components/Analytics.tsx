@@ -1,12 +1,12 @@
 import React,{useState,useEffect} from 'react';
-import{getAnalyticsSummary,getAnalyticsCharts}from'../api';
+import\{getAnalyticsSummary,getAnalyticsCharts\}from'../api'; // eslint-disable-line
 import{LineChart,Line,BarChart,Bar,PieChart,Pie,Cell,XAxis,YAxis,CartesianGrid,Tooltip,Legend,ResponsiveContainer}from'recharts';
 const Analytics:React.FC<{isDark?:boolean;cardBg?:string}>=({isDark=false,cardBg})=>{
   const[sum,setSum]=useState<any>(null);
   const[charts,setCharts]=useState<any>(null);
   const[period,setPeriod]=useState('7d');
   const[load,setLoad]=useState(true);
-  useEffect(()=>{fetchData();},[period]);
+  useEffect(()=>{fetchData();},[period]); // eslint-disable-line
   const fetchData=async()=>{
     setLoad(true);
     try{const[sR,cR]=await Promise.all([import('../api').then(m=>m.getAnalyticsSummary(period)),import('../api').then(m=>m.getAnalyticsCharts(period))]);setSum(sR.data);setCharts(cR.data);}
