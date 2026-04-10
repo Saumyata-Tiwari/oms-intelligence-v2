@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.database import get_db
 from app.models import Order, OrderItem, OrderStatus, SLAStatus, Channel, User
@@ -78,6 +78,15 @@ def _map_shopify_status(financial: str, fulfillment: Optional[str]) -> OrderStat
     return OrderStatus.PENDING
 
 
+def _strip_tz(dt: Optional[datetime]) -> Optional[datetime]:
+    """Strip timezone info — DB columns are TIMESTAMP WITHOUT TIME ZONE."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.replace(tzinfo=None)
+    return dt
+
+
 @webhook_router.post("/shopify/orders/create")
 async def shopify_order_created(
     request: Request,
@@ -100,7 +109,8 @@ async def shopify_order_created(
     ordered_at = None
     if payload.created_at:
         try:
-            ordered_at = datetime.fromisoformat(payload.created_at.replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(payload.created_at.replace("Z", "+00:00"))
+            ordered_at = _strip_tz(dt)
         except Exception:
             ordered_at = datetime.utcnow()
 
@@ -119,7 +129,8 @@ async def shopify_order_created(
     )
 
     if ordered_at:
-        order.sla_deadline = calculate_sla_deadline(ordered_at, status.value)
+        sla_dl = calculate_sla_deadline(ordered_at, status.value)
+        order.sla_deadline = _strip_tz(sla_dl)
         order.sla_status = SLAStatus(get_sla_status(order.sla_deadline))
 
     db.add(order)
@@ -181,7 +192,8 @@ async def shopify_order_updated(
         order.delivered_at = datetime.utcnow()
 
     if order.ordered_at:
-        order.sla_deadline = calculate_sla_deadline(order.ordered_at, new_status.value)
+        sla_dl = calculate_sla_deadline(order.ordered_at, new_status.value)
+        order.sla_deadline = _strip_tz(sla_dl)
         order.sla_status = SLAStatus(get_sla_status(order.sla_deadline))
 
     import asyncio

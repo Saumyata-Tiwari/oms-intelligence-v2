@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
+from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import datetime
 
@@ -24,7 +25,7 @@ async def list_orders(
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user),
 ):
-    query = select(Order)
+    query = select(Order).options(selectinload(Order.items))
     if status:
         query = query.where(Order.status == status)
     if sla_status:
@@ -35,7 +36,13 @@ async def list_orders(
             | Order.external_id.ilike(f"%{search}%")
             | Order.customer_email.ilike(f"%{search}%")
         )
-    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
+    count_query = select(func.count()).select_from(
+        select(Order).where(
+            *([Order.status == status] if status else []),
+            *([Order.sla_status == sla_status] if sla_status else []),
+        ).subquery()
+    )
+    count_result = await db.execute(select(func.count(Order.id)))
     total = count_result.scalar()
     query = query.order_by(Order.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
@@ -45,7 +52,6 @@ async def list_orders(
 
 @router.get("/sla-breaches")
 async def get_sla_breaches(db: AsyncSession = Depends(get_db)):
-    """Endpoint for N8N Workflow 1 - returns orders with SLA breaches or at risk."""
     active_statuses = [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.SHIPPED]
     result = await db.execute(
         select(Order).where(
@@ -72,7 +78,6 @@ async def get_sla_breaches(db: AsyncSession = Depends(get_db)):
 
 @router.get("/low-stock")
 async def get_low_stock(db: AsyncSession = Depends(get_db)):
-    """Endpoint for N8N Workflow 3 - returns products with low stock."""
     result = await db.execute(
         select(
             OrderItem.product_title,
@@ -88,7 +93,7 @@ async def get_low_stock(db: AsyncSession = Depends(get_db)):
         {
             "product_name": item.product_title,
             "sku": item.sku,
-            "stock_level": max(0, 100 - item.total_ordered),  # simulated stock
+            "stock_level": max(0, 100 - item.total_ordered),
             "total_ordered": item.total_ordered,
             "alert": item.total_ordered > 80
         }
@@ -98,7 +103,9 @@ async def get_low_stock(db: AsyncSession = Depends(get_db)):
 
 @router.get("/{order_id}", response_model=OrderResponse)
 async def get_order(order_id: int, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    result = await db.execute(select(Order).where(Order.id == order_id))
+    result = await db.execute(
+        select(Order).options(selectinload(Order.items)).where(Order.id == order_id)
+    )
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -107,7 +114,9 @@ async def get_order(order_id: int, db: AsyncSession = Depends(get_db), _=Depends
 
 @router.get("/external/{external_id}", response_model=OrderResponse)
 async def get_order_by_external_id(external_id: str, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    result = await db.execute(select(Order).where(Order.external_id == external_id))
+    result = await db.execute(
+        select(Order).options(selectinload(Order.items)).where(Order.external_id == external_id)
+    )
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -129,7 +138,9 @@ async def create_order(payload: OrderCreate, db: AsyncSession = Depends(get_db),
 
 @router.patch("/{order_id}/status", response_model=OrderResponse)
 async def update_order_status(order_id: int, status: OrderStatus, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    result = await db.execute(select(Order).where(Order.id == order_id))
+    result = await db.execute(
+        select(Order).options(selectinload(Order.items)).where(Order.id == order_id)
+    )
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")

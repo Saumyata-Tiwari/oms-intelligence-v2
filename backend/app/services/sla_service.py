@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 SLA_HOURS = {
@@ -13,11 +13,17 @@ RISK_THRESHOLD_HOURS = 6
 
 def calculate_sla_deadline(order_time: datetime, status: str) -> datetime:
     hours = SLA_HOURS.get(status, 48)
+    # Ensure order_time is timezone-aware
+    if order_time.tzinfo is None:
+        order_time = order_time.replace(tzinfo=timezone.utc)
     return order_time + timedelta(hours=hours)
 
 
 def get_sla_status(deadline: datetime) -> str:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
+    # Ensure deadline is timezone-aware
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=timezone.utc)
     remaining = (deadline - now).total_seconds() / 3600
     if remaining < 0:
         return "breached"
@@ -31,7 +37,7 @@ def predict_delivery_risk(
     current_status: str,
     estimated_delivery: Optional[datetime] = None,
 ) -> dict:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     deadline = calculate_sla_deadline(ordered_at, current_status)
     sla_status = get_sla_status(deadline)
     hours_remaining = max(0, (deadline - now).total_seconds() / 3600)

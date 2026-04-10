@@ -1,176 +1,115 @@
-import React, { useState, useEffect } from 'react';
-import { getOrders } from '../api';
-
-const statusColors: any = {
-  pending: 'bg-yellow-900 text-yellow-300',
-  confirmed: 'bg-blue-900 text-blue-300',
-  processing: 'bg-purple-900 text-purple-300',
-  shipped: 'bg-indigo-900 text-indigo-300',
-  delivered: 'bg-green-900 text-green-300',
-  cancelled: 'bg-red-900 text-red-300',
-  refunded: 'bg-gray-900 text-gray-300',
-};
-
-const slaColors: any = {
-  on_time: 'bg-green-900 text-green-300',
-  at_risk: 'bg-yellow-900 text-yellow-300',
-  breached: 'bg-red-900 text-red-300',
-};
-
-const Orders: React.FC = () => {
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-
-  const fetchOrders = async () => {
-    setLoading(true);
-    try {
-      const params: any = { page, page_size: 20 };
-      if (search) params.search = search;
-      if (statusFilter) params.status = statusFilter;
-      const res = await getOrders(params);
-      setOrders(res.data.orders);
-      setTotal(res.data.total);
-    } catch (err) {
-      console.error('Failed to fetch orders:', err);
-    } finally {
-      setLoading(false);
-    }
+import React,{useState,useEffect} from 'react';
+import{getOrders}from'../api';
+interface Order{id:number;shopify_order_id:string;customer_name:string;customer_email:string;status:string;sla_status:string;total_price:number;created_at:string}
+const Orders:React.FC<{isDark?:boolean;cardBg?:string}>=({isDark=false,cardBg})=>{
+  const[orders,setOrders]=useState<Order[]>([]);
+  const[load,setLoad]=useState(true);
+  const[search,setSearch]=useState('');
+  const[statusF,setStatusF]=useState('all');
+  const[slaF,setSlaF]=useState('all');
+  const[page,setPage]=useState(1);
+  const PER=15;
+  useEffect(()=>{fetchOrders();},[]);
+  const fetchOrders=async()=>{
+    setLoad(true);
+    try{const r=await getOrders();const data=Array.isArray(r.data)?r.data:r.data?.orders||r.data?.data||r.data?.items||[];setOrders(data);}
+    catch{setOrders([]);}finally{setLoad(false);}
   };
-
-  useEffect(() => { fetchOrders(); }, [page, statusFilter]);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchOrders();
-  };
-
-  return (
-    <div className="space-y-4">
+  const filtered=orders.filter(o=>{
+    const matchS=!search||o.customer_name?.toLowerCase().includes(search.toLowerCase())||o.shopify_order_id?.includes(search);
+    const matchSt=statusF==='all'||o.status===statusF;
+    const matchSla=slaF==='all'||o.sla_status===slaF;
+    return matchS&&matchSt&&matchSla;
+  });
+  const paged=filtered.slice((page-1)*PER,page*PER);
+  const totalPages=Math.ceil(filtered.length/PER);
+  const card=cardBg||(isDark?'rgba(50,48,28,0.95)':'rgba(253,250,224,0.9)');
+  const border=isDark?'rgba(204,213,174,0.12)':'rgba(70,55,30,0.11)';
+  const border2=isDark?'rgba(204,213,174,0.2)':'rgba(70,55,30,0.18)';
+  const text=isDark?'#FDFAE0':'#1E1A14';
+  const muted=isDark?'#8A8E6A':'#8A7E6C';
+  const inputBg=isDark?'rgba(58,56,32,0.8)':'#F5F0D0';
+  const rowAlt=isDark?'rgba(148,159,110,0.06)':'rgba(204,213,174,0.15)';
+  const rowHover=isDark?'rgba(148,159,110,0.12)':'#E9EDCA';
+  const slaStyle=(s:string)=>s==='breached'?{bg:'rgba(176,80,32,0.12)',color:'#B05020',border:'rgba(176,80,32,0.25)'}:s==='at_risk'?{bg:'rgba(200,120,74,0.14)',color:'#7A4010',border:'rgba(200,120,74,0.3)'}:{bg:isDark?'rgba(148,159,110,0.14)':'rgba(204,213,174,0.35)',color:isDark?'#CCD5AE':'#5A6840',border:isDark?'rgba(204,213,174,0.2)':'#CCD5AE'};
+  const stStyle=(s:string)=>['delivered','shipped'].includes(s)?{bg:isDark?'rgba(148,159,110,0.14)':'rgba(204,213,174,0.35)',color:isDark?'#CCD5AE':'#5A6840',border:isDark?'rgba(204,213,174,0.2)':'#CCD5AE'}:['cancelled','refunded'].includes(s)?{bg:'rgba(176,80,32,0.1)',color:'#B05020',border:'rgba(176,80,32,0.2)'}:{bg:isDark?'rgba(148,159,110,0.1)':'rgba(204,213,174,0.25)',color:isDark?'#CCD5AE':'#5A6840',border:isDark?'rgba(204,213,174,0.15)':'#CCD5AE'};
+  const pill=(st:{bg:string,color:string,border:string},label:string)=>(
+    <span style={{display:'inline-flex',padding:'3px 10px',borderRadius:'20px',fontSize:'11px',fontWeight:500,fontFamily:'var(--font-mono)',background:st.bg,color:st.color,border:`1px solid ${st.border}`}}>{label}</span>
+  );
+  const fmt=(d:string)=>new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});
+  return(
+    <div style={{flex:1,display:'flex',flexDirection:'column',gap:'14px',minHeight:0}}>
       {/* Filters */}
-      <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
-        <form onSubmit={handleSearch} className="flex gap-3">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by order ID, customer name or email..."
-            className="flex-1 bg-slate-700 border border-slate-600 text-white rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-slate-700 border border-slate-600 text-white rounded-lg px-4 py-2 text-sm focus:outline-none"
-          >
-            <option value="">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="processing">Processing</option>
-            <option value="shipped">Shipped</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-          <button
-            type="submit"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors"
-          >
-            Search
-          </button>
-        </form>
+      <div style={{background:card,border:`1.5px solid ${border}`,borderRadius:'14px',padding:'12px 16px',display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap',flexShrink:0}}>
+        <input value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} placeholder="Search by name or order ID..." style={{flex:'1',minWidth:'180px',maxWidth:'300px',background:inputBg,border:`1.5px solid ${border2}`,borderRadius:'10px',padding:'9px 13px',color:text,fontFamily:'var(--font-body)',fontSize:'13px',outline:'none'}}/>
+        <select value={statusF} onChange={e=>{setStatusF(e.target.value);setPage(1);}} style={{width:'135px',background:inputBg,border:`1.5px solid ${border2}`,borderRadius:'10px',padding:'9px 13px',color:text,fontFamily:'var(--font-body)',fontSize:'13px',outline:'none'}}>
+          <option value="all">All Status</option>
+          {['pending','confirmed','processing','shipped','delivered','cancelled','refunded'].map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+        </select>
+        <select value={slaF} onChange={e=>{setSlaF(e.target.value);setPage(1);}} style={{width:'130px',background:inputBg,border:`1.5px solid ${border2}`,borderRadius:'10px',padding:'9px 13px',color:text,fontFamily:'var(--font-body)',fontSize:'13px',outline:'none'}}>
+          <option value="all">All SLA</option>
+          <option value="on_time">On Time</option>
+          <option value="at_risk">At Risk</option>
+          <option value="breached">Breached</option>
+        </select>
+        <button onClick={()=>{setSearch('');setStatusF('all');setSlaF('all');setPage(1);}} style={{background:'transparent',border:`1.5px solid ${border2}`,color:muted,borderRadius:'8px',padding:'8px 14px',fontFamily:'var(--font-body)',fontSize:'12px',cursor:'pointer'}}>Clear</button>
+        <button onClick={fetchOrders} style={{background:'#949F6E',color:'#FDFAE0',border:'none',borderRadius:'8px',padding:'8px 16px',fontFamily:'var(--font-body)',fontSize:'12px',cursor:'pointer',fontWeight:500}}>↻ Refresh</button>
+        <span style={{marginLeft:'auto',fontSize:'12px',color:muted,fontFamily:'var(--font-mono)',whiteSpace:'nowrap'}}>Showing {filtered.length} of {orders.length}</span>
       </div>
 
       {/* Table */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center">
-          <h2 className="text-white font-semibold">Orders ({total})</h2>
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="text-slate-400">Loading orders...</div>
+      <div style={{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',background:card,border:`1.5px solid ${border}`,borderRadius:'14px',minHeight:0}}>
+        {load?(
+          <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <div style={{width:'28px',height:'28px',border:`3px solid ${isDark?'rgba(204,213,174,0.2)':'#E9EDCA'}`,borderTopColor:'#949F6E',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/>
           </div>
-        ) : orders.length === 0 ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="text-center">
-              <div className="text-4xl mb-3">📦</div>
-              <div className="text-slate-400">No orders found</div>
-              <div className="text-slate-500 text-sm mt-1">Orders from Shopify will appear here</div>
-            </div>
+        ):paged.length===0?(
+          <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'8px',opacity:0.5}}>
+            <span style={{fontSize:'32px'}}>📦</span>
+            <p style={{fontFamily:'var(--font-display)',color:text,fontSize:'15px'}}>No orders found</p>
+            <p style={{fontSize:'12px',color:muted}}>Orders from Shopify will appear here</p>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-700">
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-400 uppercase">Order ID</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-400 uppercase">Customer</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-400 uppercase">Status</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-400 uppercase">SLA</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-400 uppercase">Total</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-400 uppercase">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr key={order.id} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
-                    <td className="px-6 py-4 text-sm text-blue-400 font-mono">#{order.external_id}</td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-white">{order.customer_name || 'N/A'}</div>
-                      <div className="text-xs text-slate-400">{order.customer_email || ''}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[order.status]}`}>
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${slaColors[order.sla_status]}`}>
-                        {order.sla_status?.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-white">
-                      {order.currency} {order.total_price?.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-400">
-                      {order.ordered_at ? new Date(order.ordered_at).toLocaleDateString() : 'N/A'}
-                    </td>
+        ):(
+          <>
+            <div style={{overflowX:'auto',flex:1,overflowY:'auto'}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:'12px',fontFamily:'var(--font-body)'}}>
+                <thead style={{position:'sticky',top:0,background:isDark?'rgba(42,41,24,0.98)':'rgba(253,250,224,0.98)',zIndex:1}}>
+                  <tr style={{borderBottom:`1.5px solid ${border2}`}}>
+                    {['Order ID','Customer','Status','SLA','Total','Date'].map(h=>(
+                      <th key={h} style={{padding:'12px 16px',textAlign:'left',fontWeight:600,color:muted,fontSize:'11px',textTransform:'uppercase',letterSpacing:'0.4px',whiteSpace:'nowrap'}}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Pagination */}
-        {total > 20 && (
-          <div className="px-6 py-4 border-t border-slate-700 flex justify-between items-center">
-            <span className="text-sm text-slate-400">
-              Showing {(page - 1) * 20 + 1} - {Math.min(page * 20, total)} of {total}
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-4 py-2 bg-slate-700 text-white rounded-lg text-sm disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setPage(p => p + 1)}
-                disabled={page * 20 >= total}
-                className="px-4 py-2 bg-slate-700 text-white rounded-lg text-sm disabled:opacity-50"
-              >
-                Next
-              </button>
+                </thead>
+                <tbody>
+                  {paged.map((o,i)=>(
+                    <tr key={o.id} style={{borderBottom:`1px solid ${border}`,background:i%2===0?'transparent':rowAlt,transition:'background 0.15s',cursor:'default'}}
+                      onMouseEnter={e=>(e.currentTarget.style.background=rowHover)}
+                      onMouseLeave={e=>(e.currentTarget.style.background=i%2===0?'transparent':rowAlt)}>
+                      <td style={{padding:'12px 16px',fontFamily:'var(--font-mono)',color:'#949F6E',fontSize:'12px'}}>{o.shopify_order_id||`#${o.id}`}</td>
+                      <td style={{padding:'12px 16px'}}>
+                        <div style={{fontWeight:500,color:text}}>{o.customer_name}</div>
+                        <div style={{fontSize:'11px',color:muted}}>{o.customer_email}</div>
+                      </td>
+                      <td style={{padding:'12px 16px'}}>{pill(stStyle(o.status),o.status)}</td>
+                      <td style={{padding:'12px 16px'}}>{pill(slaStyle(o.sla_status),o.sla_status?.replace('_',' '))}</td>
+                      <td style={{padding:'12px 16px',fontWeight:500,color:text}}>₹{o.total_price?.toLocaleString('en-IN')}</td>
+                      <td style={{padding:'12px 16px',color:muted,fontFamily:'var(--font-mono)',fontSize:'11px'}}>{fmt(o.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+            {totalPages>1&&(
+              <div style={{padding:'10px 16px',borderTop:`1px solid ${border}`,display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',flexShrink:0}}>
+                <button disabled={page===1} onClick={()=>setPage(p=>p-1)} style={{background:'transparent',border:`1.5px solid ${border2}`,color:muted,borderRadius:'8px',padding:'5px 12px',fontSize:'12px',cursor:'pointer',fontFamily:'var(--font-body)'}}>← Prev</button>
+                {Array.from({length:Math.min(totalPages,7)},(_,i)=>{const p=totalPages<=7?i+1:page<=4?i+1:page>=totalPages-3?totalPages-6+i:page-3+i;return<button key={p} onClick={()=>setPage(p)} style={{width:'30px',height:'30px',borderRadius:'8px',border:`1.5px solid ${page===p?'#949F6E':border2}`,background:page===p?'#949F6E':'transparent',color:page===p?'#FDFAE0':muted,fontSize:'12px',cursor:'pointer'}}>{p}</button>;})}
+                <button disabled={page===totalPages} onClick={()=>setPage(p=>p+1)} style={{background:'transparent',border:`1.5px solid ${border2}`,color:muted,borderRadius:'8px',padding:'5px 12px',fontSize:'12px',cursor:'pointer',fontFamily:'var(--font-body)'}}>Next →</button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
   );
 };
-
 export default Orders;
