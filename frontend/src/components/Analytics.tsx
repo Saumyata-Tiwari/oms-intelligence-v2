@@ -6,7 +6,7 @@ const Analytics:React.FC<{isDark?:boolean;cardBg?:string}>=({isDark=false,cardBg
   const[charts,setCharts]=useState<any>(null);
   const[period,setPeriod]=useState('7d');
   const[load,setLoad]=useState(true);
-  useEffect(()=>{fetchData();},[period]); // eslint-disable-line
+  useEffect(()=>{fetchData();},[period]); // eslint-disable-line // eslint-disable-line
   const fetchData=async()=>{
     setLoad(true);
     try{const[sR,cR]=await Promise.all([import('../api').then(m=>m.getAnalyticsSummary(period)),import('../api').then(m=>m.getAnalyticsCharts(period))]);setSum(sR.data);setCharts(cR.data);}
@@ -105,3 +105,4 @@ const Analytics:React.FC<{isDark?:boolean;cardBg?:string}>=({isDark=false,cardBg
   );
 };
 export default Analytics;
+
