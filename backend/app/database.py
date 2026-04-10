@@ -10,16 +10,18 @@ convention = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
-
 metadata = MetaData(naming_convention=convention)
-
 
 class Base(DeclarativeBase):
     metadata = metadata
 
+def _make_async_url(url: str) -> str:
+    url = url.replace("postgresql://", "postgresql+asyncpg://")
+    url = url.replace("postgres://", "postgresql+asyncpg://")
+    return url
 
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    _make_async_url(settings.DATABASE_URL),
     echo=settings.APP_ENV == "development",
     pool_size=10,
     max_overflow=20,
@@ -34,7 +36,6 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
 )
 
-
 async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         try:
@@ -45,7 +46,6 @@ async def get_db() -> AsyncSession:
             raise
         finally:
             await session.close()
-
 
 async def create_tables():
     async with engine.begin() as conn:
